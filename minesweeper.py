@@ -273,7 +273,7 @@ class Game:
             pygame.display.update()                       
 
 
-import sys,os
+import sys,os # For PyInstaller
 if getattr(sys, 'frozen', False) and hasattr(sys, '_MEIPASS'):
     os.chdir(sys._MEIPASS)
 if __name__ == '__main__':
