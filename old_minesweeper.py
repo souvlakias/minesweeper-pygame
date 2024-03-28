@@ -1,5 +1,5 @@
 import pygame
-from time import time
+import pygame
 import random
 
 class Game:
@@ -45,15 +45,15 @@ class Game:
     def valid(self,i,j):
         return i>=0 and i<self.rows and j>=0 and j<self.cols #and self.visited[i][j]<=0
 
-    def prepare_grid(self,x,y): #places mines and numbers
+    def prepare_grid(self): #places mines and numbers
+        self.initialize()
         mines = 0
         while mines < self.num_mines:
             row = random.randint(0, self.rows - 1)
             col = random.randint(0, self.cols - 1)
-            if self.grid[row][col] == 0 and not (abs(row-x)<=1 and abs(col-y)<=1):
+            if self.grid[row][col] == 0:
                 self.grid[row][col] = 10
                 mines += 1
-        
         for i in range(self.rows):
             for j in range(self.cols):
                 if self.grid[i][j]==10: continue
@@ -80,9 +80,9 @@ class Game:
     def visit_zeros(self,i,j): #dfs
         if self.visited[i][j] or self.grid[i][j]: return
         self.visited[i][j]=1
-        self.visit_around(i,j)
+        self.visit_around(i,j,1)
 
-    def visit_around(self,i,j,temporary=False): # 1 for visit, 2 for temporary visit
+    def visit_around(self,i,j,value=2): #temporary will be marked as visited 2
         if self.visited[i][j]==0:
             if self.grid[i][j]==0: 
                 self.visit_zeros(i,j)
@@ -92,15 +92,15 @@ class Game:
         for dx in self.neighboors:
             for dy in self.neighboors:
                 if self.valid(i + dx, j + dy) and not self.visited[i + dx][j + dy]:
-                    if not temporary and self.grid[i+dx][j+dy]==0 and self.visited[i+dx][j+dy]!=-1:
+                    if value==1 and self.grid[i+dx][j+dy]==0 and self.visited[i+dx][j+dy]!=-1:
                         self.visit_zeros(i+dx,j+dy)
                     else:    
-                        self.visited[i + dx][j + dy]= 2 if temporary else 1
+                        self.visited[i + dx][j + dy]=value
         
     def unvisit_around(self,i,j): #fix
         for dx in self.neighboors:
             for dy in self.neighboors:
-                if self.valid(i + dx, j + dy) and self.visited[i + dx][j + dy]==2: #temporary visited
+                if self.valid(i + dx, j + dy) and self.visited[i + dx][j + dy]==2:
                     self.visited[i + dx][j + dy]=0
 
     def draw_grid(self):
@@ -110,11 +110,11 @@ class Game:
                 cell_y = i * self.cell_size
                 if self.visited[i][j]==-1: #if flag
                     self.window.blit(self.flag_image, (cell_x, cell_y))
-                elif not self.visited[i][j]: 
+                elif not self.visited[i][j]:
                     self.window.blit(self.unvisited_image, (cell_x, cell_y))
-                elif self.visited[i][j]==2: #temporary visited
+                elif self.visited[i][j]==2:
                     self.window.blit(self.visited_image, (cell_x,cell_y))
-                elif self.grid[i][j]==10: #if mine
+                elif self.grid[i][j]==10:
                     self.window.blit(self.mine_image, (cell_x, cell_y))
                 else:
                    self.window.blit(self.numbers[self.grid[i][j]],(cell_x, cell_y))
@@ -193,61 +193,41 @@ class Game:
             return 1
         return 0
     
-    def get_pos(self):
-        mouse_pos = pygame.mouse.get_pos()
-        return mouse_pos[1] // self.cell_size, mouse_pos[0] // self.cell_size
-    
     def run(self):
         running = self.levelselect()
         if running:
+            self.prepare_grid()  
             return self.play()
             
     def play(self):
         self.gameover=0
         running=True
-        first_time=True
-        holding_down=False
-        lasti,lastj=-1,-1
-        self.initialize()
         while running and not self.gameover:
             for event in pygame.event.get():
                 if event.type == pygame.QUIT:
                     running = False
-                elif holding_down and event.type == pygame.MOUSEMOTION:
-                    i,j=self.get_pos()
+                elif event.type == pygame.MOUSEBUTTONDOWN:
+                    mouse_pos = pygame.mouse.get_pos()
+                    i=mouse_pos[1] // self.cell_size
+                    j=mouse_pos[0] // self.cell_size
                     if not self.valid(i,j): continue
-                    self.unvisit_around(lasti,lastj)
-                    if self.visited[i][j]==1:
-                        lasti,lastj=i,j
-                        self.visit_around(i,j,temporary=True)
-
-                elif event.type == pygame.MOUSEBUTTONDOWN and not holding_down:
-                    i,j=self.get_pos()
-                    if not self.valid(i,j): continue
-                    if event.button == 1 and self.visited[i][j]>=0:  # Left-click DOWN                        
-                        if first_time:
-                            self.prepare_grid(i,j)
-                            first_time=False
-                            
+                    if event.button == 1 and self.visited[i][j]>=0:  # Left-click DOWN
                         if self.visited[i][j]==1:
                             flags=self.flags_around(i,j)
                             if flags>=self.grid[i][j]:
-                                self.visit_around(i,j)
+                                self.visit_around(i,j,1)
                             else:
-                                self.unvisit_around(lasti,lastj)
-                                lasti,lastj=i,j
-                                self.visit_around(i,j,temporary=True)
+                                self.visit_around(i,j)
                         else:
-                            self.visit_around(i,j)
+                            self.visit_around(i,j,1)
                     elif event.button == 3 and self.visited[i][j]<=0:  # Right-click DOWN
                         if self.visited[i][j]==-1: self.visited[i][j]=0
                         else: self.visited[i][j]=-1
                         
-                    holding_down=True
-               
                 elif event.type == pygame.MOUSEBUTTONUP:
-                    holding_down=False
-                    i,j=self.get_pos()
+                    mouse_pos = pygame.mouse.get_pos()
+                    i=mouse_pos[1] // self.cell_size
+                    j=mouse_pos[0] // self.cell_size
                     if self.valid(i,j) and event.button == 1 and self.visited[i][j]!=-1:  # Left-click UP
                         self.unvisit_around(i,j)
                         
@@ -270,14 +250,12 @@ class Game:
                         
             self.window.fill((190, 190, 190))
             self.draw_grid()
-            pygame.display.update()                       
+            pygame.display.update()
+            
+            
 
-
-import sys,os
-if getattr(sys, 'frozen', False) and hasattr(sys, '_MEIPASS'):
-    os.chdir(sys._MEIPASS)
+            
 if __name__ == '__main__':
-    random.seed(time())
     pygame.init()
     play=True
     while play:
